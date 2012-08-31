@@ -26,7 +26,7 @@ module Logging::Appenders
     #             :sns_topic => 'arn:aws:sns:us-east-1:054794666397:MyTopic',
     #             :subject => 'Server Alert!',
     #             :sms_method => :pastebin, :pastebin_developer_key => '...',
-    #             :extra_json => "{what_can_you_make_of_it: 'Well, I can make a hat.'}"
+    #             :extra_json => {:app_name => "my_app", :host => "#{%x(uname -n).strip}"},
     #             :human_readable_header => 'The following errors occurred: ',
     #             :human_readable_footer => 'kthxbye!')
     #
