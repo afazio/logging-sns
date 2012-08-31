@@ -4,7 +4,7 @@ require 'net/http'
 
 module Logging::Appenders
 
-  # Accessor / Factory for the Email appender.
+  # Accessor / Factory for the SNS appender.
   #
   def self.sns( *args )
     return ::Logging::Appenders::SNS if args.empty?
