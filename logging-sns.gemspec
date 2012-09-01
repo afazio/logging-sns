@@ -8,6 +8,9 @@ Gem::Specification.new do |gem|
   gem.summary       = %q{AWS Simple Notification Service (SNS) appender for Logging}
   gem.homepage      = ""
 
+  gem.add_dependency('aws-sdk')
+  gem.add_dependency('json')
+
   gem.files         = `git ls-files`.split($\)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
@@ -15,6 +18,4 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
   gem.version       = Logging::Appenders::SNS::VERSION
 
-  gem.add_dependency = 'aws-sdk'
-  gem.add_dependency = 'json'
 end
