@@ -18,7 +18,31 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Here is an example.
+
+    require 'logging'
+    require 'logging-sns'
+    
+    class CriticalCode
+      def initialize
+        @logger = Logging.logger[self]
+        options = {
+          :access_key_id => "...", :secret_access_key => "...",
+          :sns_topic => "arn:aws:sns:us-east-1:723967856371:Server-Alerts",
+          :subject => "A critical error has occurred!", :level => :error,
+          :sms_method => :pastebin, :pastebin_developer_key => '7b56e9d960c289bf698aaa66df647e529',
+          :human_readable_header => "Bad news, boys. Things are going very very wrong.\n",
+          :human_readable_footer => "In case of continuing issues, please unplug the data center and plug it back in."
+        }
+        @logger.add_appenders(Logging.appenders.sns('critical', options))
+      end
+
+      def check_something_important
+        @logger.error "The server will explode in 15 minutes!"
+        @logger.fatal "AAAAAAAAGGGHGGHHGHHGHGH!!!"
+      end
+    end
+    
 
 ## Contributing
 
