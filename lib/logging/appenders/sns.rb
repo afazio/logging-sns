@@ -16,13 +16,13 @@ module Logging::Appenders
   class SNS < ::Logging::Appender
     include Buffering
 
-    attr_reader :aws_access_id, :aws_secret_key
+    attr_accessor :access_key_id, :secret_access_key
     attr_accessor :sms_method, :pastebin_developer_key
     attr_accessor :extra_json, :human_readable_header, :human_readable_footer
     attr_accessor :subject, :sns_topic
 
     # call-seq:
-    #    SNS.new( name, :aws_access_id => '...', :aws_secret_key => '...',
+    #    SNS.new( name, :access_key_id => '...', :secret_access_key => '...',
     #             :sns_topic => 'arn:aws:sns:us-east-1:054794666397:MyTopic',
     #             :subject => 'Server Alert!',
     #             :sms_method => :pastebin, :pastebin_developer_key => '...',
@@ -36,8 +36,8 @@ module Logging::Appenders
     #
     # The following options are required:
     #
-    #  :aws_access_id  - The AWS Access ID of the IAM User account configured to be able to publish to sns_topic
-    #  :aws_secret_key - The AWS Secret Key of the IAM User account configured to be able to publish to sns_topic
+    #  :access_key_id  - The AWS Access ID of the IAM User account configured to be able to publish to sns_topic
+    #  :secret_access_key - The AWS Secret Key of the IAM User account configured to be able to publish to sns_topic
     #  :sns_topic - The ARN of the AWS SNS Topic that you wish to publish messages to.
     #
     # The following options are optional:
@@ -72,15 +72,15 @@ module Logging::Appenders
     # a fake SNS Topic and fake IAM credentials.
     #
     #   Logger.appenders.sns( 'critical_sns',
-    #       :aws_access_id          => "AKWQWH53XIEJH5SMBLIQN",
-    #       :aws_secret_key         => "JdD+kdjls/diwJDLSKJ3kD9lwkjej3BBiiDJtb882jJAQWD",
+    #       :access_key_id          => "AKWQWH53XIEJH5SMBLIQN",
+    #       :secret_access_key         => "JdD+kdjls/diwJDLSKJ3kD9lwkjej3BBiiDJtb882jJAQWD",
     #       :sns_topic              => "arn:aws:sns:us-east-1:054794666397:MyTopic",
     #       :subject                => "Application Errors [#{%x(uname -n).strip}]",
     #       :sms_method             => :pastebin,
     #       :pastebin_developer_key => 'abcdef0123456789abcdef0123456789',
     #       :extra_json             => {:app_name => "my_app", :host => "#{%x(uname -n).strip}"},
-    #       :human_readable_header  => "Some errors occurred!",
-    #       :human_readable_footer  => "Please open a ticket and contact the developers at 555-555-5555",
+    #       :human_readable_header  => "Some errors occurred!\n",
+    #       :human_readable_footer  => "\nPlease open a ticket and contact the developers at 555-555-5555",
     #
     #       :auto_flushing => 200,     # send an email after 200 messages have been buffered
     #       :flush_period  => 60,      # send an email after one minute
@@ -97,10 +97,10 @@ module Logging::Appenders
       configure_buffering({:auto_flushing => af}.merge(opts))
 
       # get parameters
-      self.aws_access_id = opts.getopt :aws_access_id
-      raise ArgumentError, 'Must specify aws_access_id' if @aws_access_id.nil? || @aws_access_id.empty?
-      self.aws_secret_key = opts.getopt :aws_secret_key
-      raise ArgumentError, 'Must specify aws_secret_key' if @aws_secret_key.nil? || @aws_secret_key.empty?
+      self.access_key_id = opts.getopt :access_key_id
+      raise ArgumentError, 'Must specify access_key_id' if @access_key_id.nil? || @access_key_id.empty?
+      self.secret_access_key = opts.getopt :secret_access_key
+      raise ArgumentError, 'Must specify secret_access_key' if @secret_access_key.nil? || @secret_access_key.empty?
       self.sns_topic = opts.getopt :sns_topic
       raise ArgumentError, 'Must specify sns_topic' if @sns_topic.nil? || @sns_topic.empty?
       self.subject    = opts.getopt :subject, "Message from #{$0}"
@@ -111,12 +111,20 @@ module Logging::Appenders
       self.extra_json = opts.getopt(:extra_json)
       self.human_readable_header = opts.getopt(:human_readable_header)
       self.human_readable_footer = opts.getopt(:human_readable_footer)
+      @sns = AWS::SNS.new(:access_key_id => @access_key_id, :secret_access_key => @secret_access_key)
+
+      @dry_run = (opts.getopt(:dry_run) == true)
     end
 
     # Close the appender. If the layout contains a foot, it will not be sent.  Note that the layout
     # footer is different from the human_readable_footer
     def close( *args )
+      flush
       super(false)
+    end
+
+    def dry_run?
+      @dry_run == true
     end
 
   private
@@ -143,12 +151,16 @@ module Logging::Appenders
           "api_paste_code" => human
         }
         begin
-          pastebin_result = Net::HTTP.post_form(uri, params)
+          if not dry_run?
+            pastebin_result = Net::HTTP.post_form(uri, params)
+          else
+            Exception.new("Not posting to pastebin.com: ** DRY RUN **")
+          end
         rescue Exception => msg
           ::Logging.log_internal {'Error posting to pastebin.com.  Falling back to :truncate behavior instead'}
           ::Logging.log_internal(-2) { msg }
         else
-          if match_data = %r[^Bad API request, (.*)$].match(pastebin_result.body)
+          if match_data = %r[^([^h][^t][^t][^p][^:].*)$].match(pastebin_result.body)
             ::Logging.log_internal {'Got error msg from pastebin.com.  Falling back to :truncate behavior instead'}
             ::Logging.log_internal(-2) { match_data[1] }
           else
@@ -176,8 +188,7 @@ module Logging::Appenders
       }
 
       ### send message
-      sns = AWS::SNS.new(:aws_access_id => @aws_access_id, :aws_secret_key => @aws_secret_key)
-      sns.topics[@sns_topic].publish(sms_message, publish_options)
+      @sns.topics[@sns_topic].publish(sms_message, publish_options) unless dry_run?
       self
     rescue Exception => err
       self.level = :off
@@ -187,3 +198,7 @@ module Logging::Appenders
 
   end   # SNS
 end   # Logging::Appenders
+
+Kernel::at_exit do
+  Logging.shutdown
+end
